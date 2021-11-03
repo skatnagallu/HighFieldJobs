@@ -1,0 +1,5 @@
+11-03 12:16 matplotlib   DEBUG    CACHEDIR=C:\Users\Katnagallu\.matplotlib
+11-03 12:16 matplotlib.font_manager DEBUG    Using fontManager instance from C:\Users\Katnagallu\.matplotlib\fontlist-v330.json
+11-03 12:16 matplotlib.pyplot DEBUG    Loaded backend qt5agg version unknown.
+11-03 12:16 matplotlib.pyplot DEBUG    Loaded backend Qt5Agg version unknown.
+11-03 12:16 pyiron_log   DEBUG    Not supported parameter used!

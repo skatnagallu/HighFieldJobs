@@ -3,11 +3,9 @@
 # Distributed under the terms of "New BSD License", see the LICENSE file.
 
 import numpy as np
-from pyiron import ase_to_pyiron
 from pyiron_atomistics.sphinx.base import Group
-from pyiron_atomistics.atomistics.structure.atoms import pymatgen_to_pyiron
+from pyiron_atomistics.atomistics.structure.atoms import pymatgen_to_pyiron, pyiron_to_pymatgen, ase_to_pyiron, CrystalStructure
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from pyiron_atomistics.atomistics.structure.atoms import pyiron_to_pymatgen
 from ase.build import surface, bulk
 
 __author__ = "Shyam Katnagallu"
@@ -261,7 +259,7 @@ class HighFieldJob:
             fin_step_orientation: The step orientation lying in the terrace
             slab: pyiron_atomistics.atomistics.structure.atoms.Atoms instance Required surface
         """
-        basis = bulk(name=element, crystalstructure=crystal_structure, a=lattice_constant)
+        basis = CrystalStructure(name=element, crystalstructure=crystal_structure, a=lattice_constant)
         sym = basis.get_symmetry()
         eqvdirs = np.unique(np.matmul(sym.rotations[:], (np.array(step_orientation))), axis=0)
         eqvdirk = np.unique(np.matmul(sym.rotations[:], (np.array(kink_orientation))), axis=0)
@@ -308,3 +306,4 @@ class HighFieldJob:
         if mag_moms is True:
             slab.set_initial_magnetic_moments(np.repeat(1.0, len(slab)))
         return slab
+
