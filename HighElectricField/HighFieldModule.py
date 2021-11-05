@@ -4,9 +4,10 @@
 
 import numpy as np
 from pyiron_atomistics.sphinx.base import Group
-from pyiron_atomistics.atomistics.structure.atoms import pymatgen_to_pyiron, pyiron_to_pymatgen, ase_to_pyiron, CrystalStructure
+from pyiron_atomistics.atomistics.structure.atoms import pymatgen_to_pyiron, pyiron_to_pymatgen, ase_to_pyiron, \
+    CrystalStructure
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from ase.build import surface, bulk
+from ase.build import surface, bulk, add_adsorbate
 
 __author__ = "Shyam Katnagallu"
 __copyright__ = (
@@ -290,7 +291,7 @@ class HighFieldJob:
 
     @staticmethod
     def get_slab(element='Ni', structure='fcc', a=3.526, layers=8, hkl=None, vac=10, mag_moms=True):
-        """A function to create a slab with a given hkl index positioned at the bottom of thee cell
+        """A function to create a slab with a given hkl index positioned at the bottom of the cell
         with vacuum on the top"""
         tb = bulk(element, structure, a=a, cubic=True)
         sa = surface(tb, hkl, layers, vacuum=vac)
@@ -304,3 +305,16 @@ class HighFieldJob:
         if mag_moms is True:
             slab.set_initial_magnetic_moments(np.repeat(1.0, len(slab)))
         return slab
+
+    @staticmethod
+    def add_adsorbate_slab(structure, adsorbate='Ne', cut_off_volume=11):
+        """Adds a mono adsorbate layer on the vacuum side of the stepped slab. Needs the adsorbate element, stepped slab
+        as structure and a cut_off_volume based on voronoi volume to identify surface """
+        surf_ind = np.where(structure.analyse_pyscal_voronoi_volume() > cut_off_volume)
+        adsorbed_structure = structure.to_ase()
+        for i in range(len(surf_ind[0])):
+            if structure.positions[surf_ind[0][i], 2] > np.mean(structure.positions[:, 2]):
+                add_adsorbate(adsorbed_structure, adsorbate,
+                              position=(structure.positions[surf_ind[0][i], 0], structure.positions[surf_ind[0][i], 1]),
+                              height=1.5)
+        return ase_to_pyiron(adsorbed_structure)
