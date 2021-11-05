@@ -307,10 +307,15 @@ class HighFieldJob:
         return slab
 
     @staticmethod
-    def add_adsorbate_slab(structure, adsorbate='Ne', cut_off_volume=11):
-        """Adds a mono adsorbate layer on the vacuum side of the stepped slab. Needs the adsorbate element, stepped slab
-        as structure and a cut_off_volume based on voronoi volume to identify surface """
-        surf_ind = np.where(structure.analyse.pyscal_voronoi_volume() > cut_off_volume)
+    def add_adsorbate_slab(structure, adsorbate='Ne', cut_off_volume=None):
+        """Adds a mono adsorbate layer on the vacuum side of the stepped slab. Needs the adsorbate element,
+        stepped slab as structure and a cut_off_volume (if None takes the median of voronoi volume as cutoff) based
+        on voronoi volume to identify surface """
+        if cut_off_volume is None:
+            surf_ind = np.where(structure.analyse.pyscal_voronoi_volume() >
+                                np.median(structure.analyse.pyscal_voronoi_volume()))
+        else:
+            surf_ind = np.where(structure.analyse.pyscal_voronoi_volume() > cut_off_volume)
         adsorbed_structure = structure.to_ase()
         for i in range(len(surf_ind[0])):
             if structure.positions[surf_ind[0][i], 2] > np.mean(structure.positions[:, 2]):
