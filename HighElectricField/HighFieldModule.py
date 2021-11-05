@@ -30,13 +30,12 @@ class HighFieldJob:
     threads = 4
     cores = 20
 
-    def __init__(self, pr, structure, job_name, e_field, encut, kcut):
+    def __init__(self, pr, structure, e_field, encut, kcut):
         """ HighFieldJob instance which has pr a pyiron project attribute, structure attribute, job_name attribute,
         eField as the electric field (V/A) to be applied attribute, encut as the energy cutoff attribute in eV and
         kcut as the kpoint mesh. """
         self.pr = pr
         self.structure = structure
-        self.job_name = job_name
         self.e_field = e_field
         self.encut = encut
         self.kcut = kcut
@@ -50,13 +49,13 @@ class HighFieldJob:
         cls.threads = threads
         cls.cores = cores
 
-    def gdc_evaporation(self, index, zheight=2):
+    def gdc_evaporation(self, job_name, index, zheight=2):
         """Function to set up charged slab calculations with eField in Volts/Angstrom, and fixing layers below the
         specified zheight (Angstroms). The function take HighFieldJob instance as input with additional arguments
         of index for field evaporating atom. """
         job = self.pr.create_job(
             job_type=self.pr.job_type.Sphinx,
-            job_name=self.job_name
+            job_name=job_name
         )
         job.structure = self.structure
         job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
@@ -101,10 +100,10 @@ class HighFieldJob:
         job.server.queue = queue
         job.run()
 
-    def gdc_relaxation(self, zheight=2):
+    def gdc_relaxation(self, job_name, zheight=2):
         """Function to set up charged slab relaxation calculations for the given HighFieldJob instance, by fixing the
         layers lying lower than zheight (Angstroms)."""
-        job = self.pr.create_job(self.pr.job_type.Sphinx, self.job_name)
+        job = self.pr.create_job(self.pr.job_type.Sphinx, job_name)
         job.structure = self.structure
         positions = [p[2] for p in job.structure.positions]
         job.structure.add_tag(selective_dynamics=(True, True, True))
@@ -141,13 +140,13 @@ class HighFieldJob:
         job.server.queue = queue
         job.run()
 
-    def gdc_transition_state(self, zheight=2, index=0, push=False, push_val=0.2):
+    def gdc_transition_state(self, job_name, zheight=2, index=0, push=False, push_val=0.2):
         """ Function to run transition state optimization on HighFieldJob instatnce to find the barriers. The index
         is the atom id on which TS optimization is run, by fixing the layers below zheight (Angstroms). If push is
         True, then atom with given index is pushed along z by a value of pushVal (Angstroms)"""
         job = self.pr.create_job(
             job_type=self.pr.job_type.Sphinx,
-            job_name=self.job_name
+            job_name=job_name
         )
         job.structure = self.structure
         job.set_convergence_precision(electronic_energy=1e-6, ionic_energy_tolerance=1e-3)
@@ -306,4 +305,3 @@ class HighFieldJob:
         if mag_moms is True:
             slab.set_initial_magnetic_moments(np.repeat(1.0, len(slab)))
         return slab
-
