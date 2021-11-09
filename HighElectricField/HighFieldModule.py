@@ -140,7 +140,7 @@ class HighFieldJob:
         job.server.queue = queue
         job.run()
 
-    def gdc_transition_state(self, structure, job_name, zheight=2, index=0, push=False, push_val=0.2):
+    def gdc_transition_state(self, structure, job_name, zheight=2, index=0, push=False, push_val=None):
         """ Function to run transition state optimization on HighFieldJob instatnce to find the barriers. The index
         is the atom id on which TS optimization is run, by fixing the layers below zheight (Angstroms). If push is
         True, then atom with given index is pushed along z by a value of pushVal (Angstroms)"""
@@ -197,8 +197,8 @@ class HighFieldJob:
         job.executable.version = '3.0'
         job.run()
 
-    def restart_gdc_evaporation(self, old_job):
-        """ Restart any unfinished gdc_evaporation jobs due to time limit: old_job. """
+    def restart_gdc_evaporation_relaxation(self, old_job):
+        """ Restart any unfinished gdc_evaporation or gdc_relaxation jobs due to time limit: old_job. """
         job = old_job.restart_from_charge_density(job_name=old_job.job_name + '_re')
         job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag'][
             'rhoMixing'] = self.rhomixing  # using conservative mixing can help with convergence.
