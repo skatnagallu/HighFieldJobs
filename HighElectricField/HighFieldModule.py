@@ -69,7 +69,7 @@ class HighFieldJob:
         job.structure.selective_dynamics[index] = (True, True, False)
         job.calc_minimize(ionic_steps=100,
                           electronic_steps=100)
-        job.set_occupancy_smearing('Fermi', self.ekt)
+        job.set_occupancy_smearing(width=self.ekt)
         job.set_encut(self.encut)  # in eV
         job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.25])
 
@@ -162,7 +162,7 @@ class HighFieldJob:
             job.structure.positions[index, 2] += push_val
         job.calc_minimize(ionic_steps=100,
                           electronic_steps=100)
-        job.set_occupancy_smearing('Fermi', self.ekt)
+        job.set_occupancy_smearing(width=self.ekt)
         job.set_encut(self.encut)  # in eV
         job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.0])
         right_field = self.e_field / 51.4
