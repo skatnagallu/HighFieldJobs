@@ -30,6 +30,7 @@ class HighFieldJob:
     preconscaling = 0.3
     threads = 4
     cores = 20
+    ekt = 0.1
 
     def __init__(self, pr, e_field, encut, kcut):
         """ HighFieldJob instance which has pr a pyiron project attribute, structure attribute, job_name attribute,
@@ -42,12 +43,13 @@ class HighFieldJob:
         HighFieldJob.num_of_jobs += 1
 
     @classmethod
-    def set_job_variables(cls, rhomixing, preconditioner, preconscaling, threads, cores):
+    def set_job_variables(cls, rhomixing, preconditioner, preconscaling, threads, cores, ekt):
         cls.preconditioner = preconditioner
         cls.preconscaling = preconscaling
         cls.rhomixing = rhomixing
         cls.threads = threads
         cls.cores = cores
+        cls.ekt = ekt
 
     def gdc_evaporation(self, structure, job_name, index, zheight=2):
         """Function to set up charged slab calculations with eField in Volts/Angstrom, and fixing layers below the
@@ -67,7 +69,7 @@ class HighFieldJob:
         job.structure.selective_dynamics[index] = (True, True, False)
         job.calc_minimize(ionic_steps=100,
                           electronic_steps=100)
-        job.set_occupancy_smearing('Fermi', 0.1)
+        job.set_occupancy_smearing('Fermi', self.ekt)
         job.set_encut(self.encut)  # in eV
         job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.25])
 
@@ -110,7 +112,7 @@ class HighFieldJob:
         job.structure.selective_dynamics[
             np.where(np.asarray(positions) < zheight)[0]
         ] = (False, False, False)
-        job.set_occupancy_smearing(width=0.1)
+        job.set_occupancy_smearing(width=self.ekt)
         job.set_kpoints(self.kcut)
         job.set_encut(self.encut)
         job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
@@ -160,7 +162,7 @@ class HighFieldJob:
             job.structure.positions[index, 2] += push_val
         job.calc_minimize(ionic_steps=100,
                           electronic_steps=100)
-        job.set_occupancy_smearing('Fermi', 0.1)
+        job.set_occupancy_smearing('Fermi', self.ekt)
         job.set_encut(self.encut)  # in eV
         job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.0])
         right_field = self.e_field / 51.4
