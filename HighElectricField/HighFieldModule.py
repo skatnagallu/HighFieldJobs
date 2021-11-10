@@ -60,6 +60,9 @@ class HighFieldJob:
             job_name=job_name
         )
         job.structure = structure
+        job.set_occupancy_smearing(width=self.ekt)
+        job.set_encut(self.encut)  # in eV
+        job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.25])
         job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
         positions = [p[2] for p in job.structure.positions]
         job.structure.add_tag(selective_dynamics=(True, True, True))
@@ -69,9 +72,6 @@ class HighFieldJob:
         job.structure.selective_dynamics[index] = (True, True, False)
         job.calc_minimize(ionic_steps=100,
                           electronic_steps=100)
-        job.set_occupancy_smearing(width=self.ekt)
-        job.set_encut(self.encut)  # in eV
-        job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.25])
 
         # atomic units (1 E_h/ea_0 ~= 51.4 V/Å)
         right_field = self.e_field / 51.4
@@ -151,6 +151,9 @@ class HighFieldJob:
             job_name=job_name
         )
         job.structure = structure
+        job.set_occupancy_smearing(width=self.ekt)
+        job.set_encut(self.encut)  # in eV
+        job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.0])
         job.set_convergence_precision(electronic_energy=1e-6, ionic_energy_tolerance=1e-3)
         positions = [p[2] for p in job.structure.positions]
         job.structure.add_tag(selective_dynamics=(True, True, True))
@@ -162,9 +165,6 @@ class HighFieldJob:
             job.structure.positions[index, 2] += push_val
         job.calc_minimize(ionic_steps=100,
                           electronic_steps=100)
-        job.set_occupancy_smearing(width=self.ekt)
-        job.set_encut(self.encut)  # in eV
-        job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.0])
         right_field = self.e_field / 51.4
         left_field = 0.0
         cell = job.structure.cell * self.ANGSTROM_TO_BOHR
