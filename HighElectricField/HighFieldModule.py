@@ -325,13 +325,3 @@ class HighFieldJob:
                               position=(structure.positions[surf_ind[0][i], 0], structure.positions[surf_ind[0][i], 1]),
                               height=1.5)
         return ase_to_pyiron(adsorbed_structure)
-
-    @staticmethod
-    def sum(a, b):
-        """
-        returns sum of two nums
-        :param a: 1st nu
-        :param b: 2nd num
-        :return: sum
-        """
-        return a+b
