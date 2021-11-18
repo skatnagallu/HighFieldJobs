@@ -287,7 +287,7 @@ class HighFieldJob:
         pmg_refined = sga.get_refined_structure()
         slab = pymatgen_to_pyiron(pmg_refined)
         slab.positions[:, 2] = slab.positions[:, 2] - np.min(slab.positions[:, 2])
-        slab.set_pbc = True
+        slab.set_pbc(True)
         slab.set_initial_magnetic_moments(np.repeat(1.0, len(slab)))
         return slab, high_index_surface, fin_kink_orientation, fin_step_orientation
 
@@ -303,7 +303,7 @@ class HighFieldJob:
         pmg_refined = sga.get_refined_structure()
         slab = pymatgen_to_pyiron(pmg_refined)
         slab.positions[:, 2] = slab.positions[:, 2] - np.min(slab.positions[:, 2])
-        slab.set_pbc = True
+        slab.set_pbc(True)
         if mag_moms is True:
             slab.set_initial_magnetic_moments(np.repeat(1.0, len(slab)))
         return slab
