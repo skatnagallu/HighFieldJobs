@@ -59,8 +59,8 @@ class HighFieldJob:
             job_type=self.pr.job_type.Sphinx,
             job_name=job_name
         )
-        job.structure = structure
         job.set_occupancy_smearing(width=self.ekt)
+        job.structure = structure
         job.set_encut(self.encut)  # in eV
         job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.25])
         job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
@@ -106,13 +106,13 @@ class HighFieldJob:
         """Function to set up charged slab relaxation calculations for the given HighFieldJob instance, by fixing the
         layers lying lower than zheight (Angstroms)."""
         job = self.pr.create_job(self.pr.job_type.Sphinx, job_name)
+        job.set_occupancy_smearing(width=self.ekt)
         job.structure = structure
         positions = [p[2] for p in job.structure.positions]
         job.structure.add_tag(selective_dynamics=(True, True, True))
         job.structure.selective_dynamics[
             np.where(np.asarray(positions) < zheight)[0]
         ] = (False, False, False)
-        job.set_occupancy_smearing(width=self.ekt)
         job.set_kpoints(self.kcut)
         job.set_encut(self.encut)
         job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
@@ -150,8 +150,8 @@ class HighFieldJob:
             job_type=self.pr.job_type.Sphinx,
             job_name=job_name
         )
-        job.structure = structure
         job.set_occupancy_smearing(width=self.ekt)
+        job.structure = structure
         job.set_encut(self.encut)  # in eV
         job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.0])
         job.set_convergence_precision(electronic_energy=1e-6, ionic_energy_tolerance=1e-3)
