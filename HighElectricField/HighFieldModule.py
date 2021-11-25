@@ -8,6 +8,7 @@ from pyiron_atomistics.atomistics.structure.atoms import pymatgen_to_pyiron, pyi
     CrystalStructure
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from ase.build import surface, bulk, add_adsorbate
+import warnings
 
 __author__ = "Shyam Katnagallu"
 __copyright__ = (
@@ -200,6 +201,7 @@ class HighFieldJob:
         job.run()
 
     def restart_gdc_evaporation_relaxation(self, old_job):
+        warnings.warn("deprecated: Use restart_gdc_evaporation_cd instead.", DeprecationWarning)
         """ Restart any unfinished gdc_evaporation or gdc_relaxation jobs due to time limit: old_job. """
         job = old_job.restart_from_charge_density(job_name=old_job.job_name + '_re')
         job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag'][
@@ -215,6 +217,7 @@ class HighFieldJob:
         job.run()
 
     def restart_gdc_transition_state(self, old_job):
+        warnings.warn("deprecated: Use restart_gdc_transition_state_cd instead.", DeprecationWarning)
         """ Restart any unfinished gdc_transition state jobs due to time limit: old_job. """
         job = old_job.restart_from_charge_density(job_name=old_job.job_name + '_re')
         job.input['sphinx']['main']['ricTS']['bornOppenheimer']['scfDiag'][
@@ -325,3 +328,147 @@ class HighFieldJob:
                               position=(structure.positions[surf_ind[0][i], 0], structure.positions[surf_ind[0][i], 1]),
                               height=1.5)
         return ase_to_pyiron(adsorbed_structure)
+
+    def restart_gdc_evaporation_cd(self, basis, new_job_name, old_job_name, charge=False, zheight=2.0):
+        """Function to restart evaporation from previous charge density of old_job_name """
+        old_job = self.pr.load(old_job_name, convert_to_object=False)
+        charge_density_file = old_job.working_directory+'/rho.sxb'
+        job = self.pr.create_job(
+            job_type=self.pr.job_type.Sphinx,
+            job_name=new_job_name
+        )
+        job.structure = basis
+        job.set_occupancy_smearing(width=self.ekt)
+        job.set_encut(self.encut)  # in eV
+        job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.0])
+        job.set_convergence_precision(electronic_energy=1e-6, ionic_energy_tolerance=1e-3)
+        positions = [p[2] for p in job.structure.positions]
+        job.structure.add_tag(selective_dynamics=(True, True, True))
+        job.structure.selective_dynamics[
+            np.where(np.asarray(positions) < zheight)[0]
+        ] = (False, False, False)
+        job.calc_static(retain_charge_density=True)
+        right_field = self.e_field / 51.4
+        left_field = 0.0
+        cell = job.structure.cell * self.ANGSTROM_TO_BOHR
+        area = np.linalg.norm(np.cross(cell[0], cell[1]))
+        total_charge = (right_field - left_field) * area / (4 * np.pi)
+        sort_positions = np.sort(positions)
+        job.input.sphinx.initialGuess.rho = Group({"file": '"' + charge_density_file + '"'})
+        if charge:
+            job.input.sphinx.initialGuess.rho.charged = Group({})
+            job.input.sphinx.initialGuess.rho.charged.charge = total_charge
+            job.input.sphinx.initialGuess.rho.charged.z = sort_positions[-2] * self.ANGSTROM_TO_BOHR
+
+        job.input.sphinx.PAWHamiltonian.nExcessElectrons = -total_charge
+        job.input.sphinx.PAWHamiltonian.dipoleCorrection = True
+        job.input.sphinx.PAWHamiltonian.zField = left_field * self.HARTREE_TO_EV
+        job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['rhoMixing'] = self.rhomixing
+        job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
+            'type'] = self.preconscaling
+        job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
+            'scaling'] = self.preconditioner
+        queue = 'cm'
+        job.server.cores = self.cores
+        job.server.queue = queue
+        job.input['THREADS'] = self.threads
+        job.run()
+
+    def restart_gdc_transition_state_cd(self, structure, new_job_name, old_job_name, charge=False, zheight=2, index=0,
+                                        push=False, push_val=None):
+        """ Function to restart transition state optimization from a previous TS optimization job's charge density."""
+        old_job = self.pr.load(old_job_name, convert_to_object=False)
+        charge_density_file = old_job.working_directory + '/rho.sxb'
+        job = self.pr.create_job(
+            job_type=self.pr.job_type.Sphinx,
+            job_name=new_job_name
+        )
+        job.set_occupancy_smearing(width=self.ekt)
+        job.structure = structure
+        job.set_encut(self.encut)  # in eV
+        job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.0])
+        job.set_convergence_precision(electronic_energy=1e-6, ionic_energy_tolerance=1e-3)
+        positions = [p[2] for p in job.structure.positions]
+        job.structure.add_tag(selective_dynamics=(True, True, True))
+        job.structure.selective_dynamics[
+            np.where(np.asarray(positions) < zheight)[0]
+        ] = (False, False, False)
+        job.structure.selective_dynamics[index] = (True, True, True)
+        if push:
+            job.structure.positions[index, 2] += push_val
+        job.calc_minimize(ionic_steps=100,
+                          electronic_steps=100)
+        right_field = self.e_field / 51.4
+        left_field = 0.0
+        cell = job.structure.cell * self.ANGSTROM_TO_BOHR
+        area = np.linalg.norm(np.cross(cell[0], cell[1]))
+        total_charge = (right_field - left_field) * area / (4 * np.pi)
+        sort_positions = np.sort(positions)
+        job.input.sphinx.initialGuess.rho = Group({"file": '"' + charge_density_file + '"'})
+        if charge:
+            job.input.sphinx.initialGuess.rho.charged = Group({})
+            job.input.sphinx.initialGuess.rho.charged.charge = total_charge
+            job.input.sphinx.initialGuess.rho.charged.z = sort_positions[-2] * self.ANGSTROM_TO_BOHR
+        job.input.sphinx.PAWHamiltonian.nExcessElectrons = -total_charge
+        job.input.sphinx.PAWHamiltonian.dipoleCorrection = True
+        job.input.sphinx.PAWHamiltonian.zField = left_field * self.HARTREE_TO_EV
+        mainGroup = job.input.sphinx['main']
+        mainGroup['ricTS'] = mainGroup.pop('ricQN')
+        mainGroup['ricTS'].set_group('transPath')
+        tp = mainGroup['ricTS']['transPath']
+        tp['atomId'] = index + 1
+        tp['dir'] = [0, 0, 1]
+        job.input['sphinx']['main']['ricTS']['bornOppenheimer']['scfDiag'][
+            'rhoMixing'] = self.rhomixing  # using conservative mixing can help with convergence.
+        job.input['sphinx']['main']['ricTS']['bornOppenheimer']['scfDiag']['preconditioner'][
+            'type'] = self.preconditioner
+        job.input['sphinx']['main']['ricTS']['bornOppenheimer']['scfDiag']['preconditioner'][
+            'scaling'] = self.preconscaling
+        queue = 'cm'
+        job.server.cores = self.cores
+        job.server.queue = queue
+        job.input['THREADS'] = self.threads
+        job.executable.version = '3.0'
+        job.run()
+
+    def restart_gdc_relaxation(self, structure, new_job_name, old_job_name, charge=False, zheight=2):
+        """Function to restart relaxation job based on charge density."""
+        old_job = self.pr.load(old_job_name, convert_to_object=False)
+        charge_density_file = old_job.working_directory + '/rho.sxb'
+        job = self.pr.create_job(self.pr.job_type.Sphinx, new_job_name)
+        job.set_occupancy_smearing(width=self.ekt)
+        job.structure = structure
+        positions = [p[2] for p in job.structure.positions]
+        job.structure.add_tag(selective_dynamics=(True, True, True))
+        job.structure.selective_dynamics[
+            np.where(np.asarray(positions) < zheight)[0]
+        ] = (False, False, False)
+        job.set_kpoints(self.kcut)
+        job.set_encut(self.encut)
+        job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
+        job.calc_minimize()
+        right_field = self.e_field / 51.4
+        left_field = 0.0
+        cell = job.structure.cell * self.ANGSTROM_TO_BOHR
+        area = np.linalg.norm(np.cross(cell[0], cell[1]))
+        total_charge = (right_field - left_field) * area / (4 * np.pi)
+        sort_positions = np.sort(positions)
+        job.input.sphinx.initialGuess.rho = Group({"file": '"' + charge_density_file + '"'})
+        if charge:
+            job.input.sphinx.initialGuess.rho.charged = Group({})
+            job.input.sphinx.initialGuess.rho.charged.charge = total_charge
+            job.input.sphinx.initialGuess.rho.charged.z = sort_positions[-2] * self.ANGSTROM_TO_BOHR
+
+        job.input.sphinx.PAWHamiltonian.nExcessElectrons = -total_charge
+        job.input.sphinx.PAWHamiltonian.dipoleCorrection = True
+        job.input.sphinx.PAWHamiltonian.zField = left_field * self.HARTREE_TO_EV
+        job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['rhoMixing'] = self.rhomixing
+        job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
+            'type'] = self.preconscaling
+        job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
+            'scaling'] = self.preconditioner
+        queue = 'cm'
+        job.server.cores = self.cores
+        job.server.queue = queue
+        job.input['THREADS'] = self.threads
+        job.run()
