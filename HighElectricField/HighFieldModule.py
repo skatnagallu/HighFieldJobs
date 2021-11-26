@@ -431,7 +431,7 @@ class HighFieldJob:
         job.executable.version = '3.0'
         job.run()
 
-    def restart_gdc_relaxation(self, structure, new_job_name, old_job_name, charge=False, zheight=2):
+    def restart_gdc_relaxation_cd(self, structure, new_job_name, old_job_name, charge=False, zheight=2):
         """Function to restart relaxation job based on charge density."""
         old_job = self.pr.load(old_job_name, convert_to_object=False)
         charge_density_file = old_job.working_directory + '/rho.sxb'
