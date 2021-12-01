@@ -365,9 +365,9 @@ class HighFieldJob:
         job.input.sphinx.PAWHamiltonian.zField = left_field * self.HARTREE_TO_EV
         job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['rhoMixing'] = self.rhomixing
         job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
-            'type'] = self.preconscaling
+            'type'] = self.preconditioner
         job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
-            'scaling'] = self.preconditioner
+            'scaling'] = self.preconscaling
         queue = 'cm'
         job.server.cores = self.cores
         job.server.queue = queue
@@ -464,9 +464,9 @@ class HighFieldJob:
         job.input.sphinx.PAWHamiltonian.zField = left_field * self.HARTREE_TO_EV
         job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['rhoMixing'] = self.rhomixing
         job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
-            'type'] = self.preconscaling
+            'type'] = self.preconditioner
         job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
-            'scaling'] = self.preconditioner
+            'scaling'] = self.preconscaling
         queue = 'cm'
         job.server.cores = self.cores
         job.server.queue = queue
