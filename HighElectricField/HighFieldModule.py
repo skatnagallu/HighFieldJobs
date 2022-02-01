@@ -399,7 +399,8 @@ class HighFieldJob:
         job.structure.selective_dynamics[
             np.where(np.asarray(positions) < zheight)[0]
         ] = (False, False, False)
-        job.calc_static(retain_charge_density=True)
+        job.calc_minimize(ionic_steps=100,
+                          electronic_steps=100)
         right_field = self.e_field / 51.4
         left_field = 0.0
         cell = job.structure.cell * self.ANGSTROM_TO_BOHR
