@@ -395,10 +395,6 @@ class HighFieldJob:
         job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.0])
         job.set_convergence_precision(electronic_energy=1e-6, ionic_energy_tolerance=1e-3)
         positions = [p[2] for p in job.structure.positions]
-        job.structure.add_tag(selective_dynamics=(True, True, True))
-        job.structure.selective_dynamics[
-            np.where(np.asarray(positions) < zheight)[0]
-        ] = (False, False, False)
         job.calc_minimize(ionic_steps=100,
                           electronic_steps=100)
         right_field = self.e_field / 51.4
@@ -442,11 +438,6 @@ class HighFieldJob:
         job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.0])
         job.set_convergence_precision(electronic_energy=1e-6, ionic_energy_tolerance=1e-3)
         positions = [p[2] for p in job.structure.positions]
-        job.structure.add_tag(selective_dynamics=(True, True, True))
-        job.structure.selective_dynamics[
-            np.where(np.asarray(positions) < zheight)[0]
-        ] = (False, False, False)
-        job.structure.selective_dynamics[index] = (True, True, True)
         if push:
             job.structure.positions[index, 2] += push_val
         job.calc_minimize(ionic_steps=100,
@@ -492,10 +483,6 @@ class HighFieldJob:
         job.set_occupancy_smearing(self.ekt_scheme, width=self.ekt)
         job.structure = structure
         positions = [p[2] for p in job.structure.positions]
-        job.structure.add_tag(selective_dynamics=(True, True, True))
-        job.structure.selective_dynamics[
-            np.where(np.asarray(positions) < zheight)[0]
-        ] = (False, False, False)
         job.set_kpoints(self.kcut)
         job.set_encut(self.encut)
         job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
