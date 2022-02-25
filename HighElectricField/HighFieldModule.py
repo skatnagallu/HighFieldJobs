@@ -54,7 +54,7 @@ class HighFieldJob:
         cls.ekt = ekt
         cls.ekt_scheme = ekt_scheme
 
-    def gdc_evaporation(self, structure, job_name, index, zheight=2):
+    def gdc_evaporation(self, structure, job_name, index, zheight=2, vdw=False):
         """Function to set up charged slab calculations with eField in Volts/Angstrom, and fixing layers below the
         specified zheight (Angstroms). The function take HighFieldJob instance as input with additional arguments
         of index for field evaporating atom. """
@@ -89,7 +89,9 @@ class HighFieldJob:
         job.input.sphinx.initialGuess.rho.charged = Group({})
         job.input.sphinx.initialGuess.rho.charged.charge = total_charge
         job.input.sphinx.initialGuess.rho.charged.z = sort_positions[-2] * self.ANGSTROM_TO_BOHR
-
+        if vdw:
+            job.input.sphinx.PAWHamiltonian.vdwCorrection = Group({})
+            job.input.sphinx.PAWHamiltonian.vdwCorrection.method = "\"D2\""
         job.input.sphinx.PAWHamiltonian.nExcessElectrons = -total_charge
         job.input.sphinx.PAWHamiltonian.dipoleCorrection = True
         job.input.sphinx.PAWHamiltonian.zField = left_field * self.HARTREE_TO_EV
@@ -155,7 +157,7 @@ class HighFieldJob:
         job.input['THREADS'] = self.threads
         job.run()
 
-    def gdc_relaxation(self, structure, job_name, zheight=2):
+    def gdc_relaxation(self, structure, job_name, zheight=2, vdw=False):
         """Function to set up charged slab relaxation calculations for the given HighFieldJob instance, by fixing the
         layers lying lower than zheight (Angstroms)."""
         job = self.pr.create_job(self.pr.job_type.Sphinx, job_name)
@@ -179,6 +181,9 @@ class HighFieldJob:
         job.input.sphinx.initialGuess.rho.charged = Group({})
         job.input.sphinx.initialGuess.rho.charged.charge = total_charge
         job.input.sphinx.initialGuess.rho.charged.z = sort_positions[-2] * self.ANGSTROM_TO_BOHR
+        if vdw:
+            job.input.sphinx.PAWHamiltonian.vdwCorrection = Group({})
+            job.input.sphinx.PAWHamiltonian.vdwCorrection.method = "\"D2\""
         job.input.sphinx.PAWHamiltonian.nExcessElectrons = -total_charge
         job.input.sphinx.PAWHamiltonian.dipoleCorrection = True
         job.input.sphinx.PAWHamiltonian.zField = left_field * self.HARTREE_TO_EV
@@ -195,7 +200,7 @@ class HighFieldJob:
         job.server.queue = queue
         job.run()
 
-    def gdc_transition_state(self, structure, job_name, zheight=2, index=0, push=False, push_val=None):
+    def gdc_transition_state(self, structure, job_name, zheight=2, index=0, push=False, push_val=None,vdw=False):
         """ Function to run transition state optimization on HighFieldJob instatnce to find the barriers. The index
         is the atom id on which TS optimization is run, by fixing the layers below zheight (Angstroms). If push is
         True, then atom with given index is pushed along z by a value of pushVal (Angstroms)"""
@@ -227,6 +232,9 @@ class HighFieldJob:
         job.input.sphinx.initialGuess.rho.charged = Group({})
         job.input.sphinx.initialGuess.rho.charged.charge = total_charge
         job.input.sphinx.initialGuess.rho.charged.z = sort_positions[-2] * self.ANGSTROM_TO_BOHR
+        if vdw:
+            job.input.sphinx.PAWHamiltonian.vdwCorrection = Group({})
+            job.input.sphinx.PAWHamiltonian.vdwCorrection.method = "\"D2\""
         job.input.sphinx.PAWHamiltonian.nExcessElectrons = -total_charge
         job.input.sphinx.PAWHamiltonian.dipoleCorrection = True
         job.input.sphinx.PAWHamiltonian.zField = left_field * self.HARTREE_TO_EV
@@ -381,6 +389,17 @@ class HighFieldJob:
                               height=1.5)
         return ase_to_pyiron(adsorbed_structure)
 
+    @staticmethod
+    def add_adsorbate_slab_positions(structure, adsorbate='Ne', adsorbatePositions, adsorbate_height=1.5):
+        """Adds a mono adsorbate layer onbased on user defined positions. Needs the adsorbate element,
+        slab structure, positions on which adsorbate has to be added, and adsorbate height """
+        adsorbed_structure = structure.to_ase()
+        for i in range(len(adsorbatePositions)):
+            add_adsorbate(adsorbed_structure, adsorbate,
+                          position=(structure.positions[adsorbatePositions[i], 0], structure.positions[adsorbatePositions[i], 1]),
+                          height=adsorbate_height)
+        return ase_to_pyiron(adsorbed_structure)
+
     def restart_gdc_evaporation_cd(self, basis, new_job_name, old_job_name, charge=False, zheight=2.0):
         """Function to restart evaporation from previous charge density of old_job_name """
         old_job = self.pr.load(old_job_name, convert_to_object=False)
@@ -423,7 +442,7 @@ class HighFieldJob:
         job.input['THREADS'] = self.threads
         job.run()
 
-    def restart_gdc_transition_state_cd(self, structure, new_job_name, old_job_name, charge=False, zheight=2, index=0,
+    def restart_gdc_transition_state_cd(self, structure, new_job_name, old_job_name, charge=False, index=0,
                                         push=False, push_val=None):
         """ Function to restart transition state optimization from a previous TS optimization job's charge density."""
         old_job = self.pr.load(old_job_name, convert_to_object=False)
