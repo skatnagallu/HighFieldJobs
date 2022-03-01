@@ -390,7 +390,7 @@ class HighFieldJob:
         return ase_to_pyiron(adsorbed_structure)
 
     @staticmethod
-    def add_adsorbate_slab_positions(structure, adsorbate='Ne', adsorbatePositions, adsorbate_height=1.5):
+    def add_adsorbate_slab_positions(structure, adsorbatePositions, adsorbate='Ne', adsorbate_height=1.5):
         """Adds a mono adsorbate layer onbased on user defined positions. Needs the adsorbate element,
         slab structure, positions on which adsorbate has to be added, and adsorbate height """
         adsorbed_structure = structure.to_ase()
