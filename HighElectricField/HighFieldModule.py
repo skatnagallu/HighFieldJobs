@@ -157,6 +157,37 @@ class HighFieldJob:
         job.input['THREADS'] = self.threads
         job.run()
 
+    def field_free_relaxation(self, structure, job_name, zheight=2, vdw=False):
+        """Function to set up  slab relaxation calculations for the given HighFieldJob instance, by fixing the
+        layers lying lower than zheight (Angstroms) and without any field."""
+        job = self.pr.create_job(self.pr.job_type.Sphinx, job_name)
+        job.set_occupancy_smearing(self.ekt_scheme, width=self.ekt)
+        job.structure = structure
+        positions = [p[2] for p in job.structure.positions]
+        job.structure.add_tag(selective_dynamics=(True, True, True))
+        job.structure.selective_dynamics[
+            np.where(np.asarray(positions) < zheight)[0]
+        ] = (False, False, False)
+        job.set_kpoints(self.kcut)
+        job.set_encut(self.encut)
+        job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
+        job.calc_minimize()
+        if vdw:
+            job.input.sphinx.PAWHamiltonian.vdwCorrection = Group({})
+            job.input.sphinx.PAWHamiltonian.vdwCorrection.method = "\"D2\""
+        job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag'][
+            'rhoMixing'] = self.rhomixing  # using conservative mixing can help with convergence.
+        job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
+            'type'] = self.preconditioner
+        job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
+            'scaling'] = self.preconscaling
+        job.fix_symmetry = False
+        job.input['THREADS'] = self.threads
+        queue = 'cm'
+        job.server.cores = self.cores
+        job.server.queue = queue
+        job.run()
+
     def gdc_relaxation(self, structure, job_name, zheight=2, vdw=False):
         """Function to set up charged slab relaxation calculations for the given HighFieldJob instance, by fixing the
         layers lying lower than zheight (Angstroms)."""
