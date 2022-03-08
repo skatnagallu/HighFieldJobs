@@ -405,7 +405,7 @@ class HighFieldJob:
         charge_density_file = old_job.working_directory + '/rho.sxb'
         job = self.pr.create_job(self.pr.job_type.Sphinx, new_job_name)
         job.input = old_job.input
-        job.input.sphinx.initialGuess.rho = Group({"file": "'"+charge_density_file+"'"})
+        job.input.sphinx.initialGuess.rho = Group({"file": '"'+charge_density_file+'"'})
         job.structure = old_job.get_structure(-1)
         if TS:
             job.input['sphinx']['main']['ricTS']['bornOppenheimer']['scfDiag'][
