@@ -156,9 +156,10 @@ class HighFieldJob:
         job.input['THREADS'] = self.threads
         job.run()
 
-    def field_free_relaxation(self, structure, job_name, zheight=2, vdw=False):
+    def field_free_relaxation(self, structure, job_name, zheight=2, vdw=False, constrained=False, index=None):
         """Function to set up  slab relaxation calculations for the given HighFieldJob instance, by fixing the
-        layers lying lower than zheight (Angstroms) and without any field."""
+        layers lying lower than zheight (Angstroms) and without any field. Use constrained if you want to fix an atom
+        of index."""
         job = self.pr.create_job(self.pr.job_type.Sphinx, job_name)
         job.set_occupancy_smearing(self.ekt_scheme, width=self.ekt)
         job.structure = structure
@@ -167,6 +168,8 @@ class HighFieldJob:
         job.structure.selective_dynamics[
             np.where(np.asarray(positions) < zheight)[0]
         ] = (False, False, False)
+        if constrained:
+            job.structure.selective_dynamics[index] = (True, True, False)
         job.set_kpoints(self.kcut)
         job.set_encut(self.encut)
         job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
