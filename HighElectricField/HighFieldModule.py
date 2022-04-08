@@ -32,6 +32,8 @@ class HighFieldJob:
     cores = 20
     ekt = 0.1
     ekt_scheme = 'Fermi'
+    e_energy = 1e-7
+    i_energy = 1e-3
 
     def __init__(self, pr, e_field, encut, kcut):
         """ HighFieldJob instance which has pr a pyiron project attribute, structure attribute, job_name attribute,
@@ -65,7 +67,7 @@ class HighFieldJob:
         job.structure = structure
         job.set_encut(self.encut)  # in eV
         job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.25])
-        job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
+        job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
         positions = [p[2] for p in job.structure.positions]
         job.structure.add_tag(selective_dynamics=(True, True, True))
         job.structure.selective_dynamics[
@@ -115,7 +117,7 @@ class HighFieldJob:
         )
         job.set_occupancy_smearing(self.ekt_scheme, self.ekt)
         job.structure = basis
-        job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
+        job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
         positions = [p[2] for p in job.structure.positions]
         job.structure.add_tag(selective_dynamics=(True, True, True))
         job.structure.selective_dynamics[
@@ -172,7 +174,7 @@ class HighFieldJob:
             job.structure.selective_dynamics[index] = (True, True, False)
         job.set_kpoints(self.kcut)
         job.set_encut(self.encut)
-        job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
+        job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
         job.calc_minimize()
         if vdw:
             job.input.sphinx.PAWHamiltonian.vdwCorrection = Group({})
@@ -203,7 +205,7 @@ class HighFieldJob:
         ] = (False, False, False)
         job.set_kpoints(self.kcut)
         job.set_encut(self.encut)
-        job.set_convergence_precision(electronic_energy=1e-5, ionic_energy_tolerance=1e-3)
+        job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
         job.calc_minimize()
         right_field = self.e_field / 51.4
         left_field = 0.0
@@ -245,7 +247,7 @@ class HighFieldJob:
         job.structure = structure
         job.set_encut(self.encut)  # in eV
         job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.0])
-        job.set_convergence_precision(electronic_energy=1e-6, ionic_energy_tolerance=1e-3)
+        job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
         positions = [p[2] for p in job.structure.positions]
         job.structure.add_tag(selective_dynamics=(True, True, True))
         job.structure.selective_dynamics[
