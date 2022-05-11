@@ -171,7 +171,7 @@ class HighFieldJob:
             np.where(np.asarray(positions) < zheight)[0]
         ] = (False, False, False)
         if constrained:
-            job.structure.selective_dynamics[index] = (True, True, False)
+            job.structure.selective_dynamics[index] = (False, False, True)
         job.set_kpoints(self.kcut)
         job.set_encut(self.encut)
         job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
@@ -204,7 +204,7 @@ class HighFieldJob:
             np.where(np.asarray(positions) < zheight)[0]
         ] = (False, False, False)
         if constrained:
-            job.structure.selective_dynamics[index] = (True, True, False)
+            job.structure.selective_dynamics[index] = (False, False, True)
         job.set_kpoints(self.kcut)
         job.set_encut(self.encut)
         job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
