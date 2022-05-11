@@ -192,7 +192,7 @@ class HighFieldJob:
         job.server.queue = queue
         job.run()
 
-    def gdc_relaxation(self, structure, job_name, zheight=2, vdw=False):
+    def gdc_relaxation(self, structure, job_name, zheight=2, vdw=False, constrained=False, index=None):
         """Function to set up charged slab relaxation calculations for the given HighFieldJob instance, by fixing the
         layers lying lower than zheight (Angstroms)."""
         job = self.pr.create_job(self.pr.job_type.Sphinx, job_name)
@@ -203,6 +203,8 @@ class HighFieldJob:
         job.structure.selective_dynamics[
             np.where(np.asarray(positions) < zheight)[0]
         ] = (False, False, False)
+        if constrained:
+            job.structure.selective_dynamics[index] = (True, True, False)
         job.set_kpoints(self.kcut)
         job.set_encut(self.encut)
         job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
