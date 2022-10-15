@@ -1,2 +1,2 @@
 # HighFieldJobs
-Functionalities for creating and analysing high electric field DFT jobs from SPHInX
+Python module to create high electric field density functional theory calculations. Prerequisites are SPHInX and pyiron.
