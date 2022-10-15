@@ -14,7 +14,7 @@ __copyright__ = (
     "Copyright 2021, Max-Planck-Institut für Eisenforschung GmbH - "
     "Computational Materials Design (CM) Department"
 )
-__version__ = "0.2"
+__version__ = "0.9"
 __maintainer__ = "Shyam Katnagallu"
 __email__ = "s.katnagallu@mpie.de"
 __status__ = "production"
@@ -35,57 +35,66 @@ class HighFieldJob:
     e_energy = 1e-7
     i_energy = 1e-3
 
-    def __init__(self, pr, e_field, encut, kcut):
+    # todo: add functions to do layer convergence and fixed layer convergence
+    def __init__(self, pr, e_field, en_cut, k_cut):
         """ HighFieldJob instance which has pr a pyiron project attribute, structure attribute, job_name attribute,
         eField as the electric field (V/A) to be applied attribute, encut as the energy cutoff attribute in eV and
         kcut as the kpoint mesh. """
         self.pr = pr
         self.e_field = e_field
-        self.encut = encut
-        self.kcut = kcut
+        self.en_cut = en_cut
+        self.k_cut = k_cut
         HighFieldJob.num_of_jobs += 1
 
     @classmethod
-    def set_job_variables(cls, rhomixing, preconditioner, preconscaling, threads, cores, ekt, ekt_scheme):
+    def set_job_variables(cls, rho_mixing, preconditioner, preconscaling, threads, cores, ekt, ekt_scheme):
         cls.preconditioner = preconditioner
         cls.preconscaling = preconscaling
-        cls.rhomixing = rhomixing
+        cls.rho_mixing = rho_mixing
         cls.threads = threads
         cls.cores = cores
         cls.ekt = ekt
         cls.ekt_scheme = ekt_scheme
 
-    def gdc_evaporation(self, structure, job_name, index, zheight=2, vdw=False):
+    def gdc_evaporation(self, structure, job_name, index, z_height=2, vdw=False, PES_xy=False, TS=False):
         """Function to set up charged slab calculations with eField in Volts/Angstrom, and fixing layers below the
-        specified zheight (Angstroms). The function take HighFieldJob instance as input with additional arguments
-        of index for field evaporating atom. """
+        specified z_height (Angstroms). The function take HighFieldJob instance as input with additional arguments
+        of index for field evaporating atom. Set PES_xy to True to calculate PES along xy.
+
+        :param TS: Set to True for transition state optimization calculation
+        :param PES_xy: Set to True for potential energy surface calculation along xy
+        :param vdw: set to True to include van derWalls corrections of D2 type
+        :param z_height: height of layers to be fixed
+        :param index: index of the evaporating (interested) atom
+        :param job_name: name of pyiron job
+        :param structure: pyiron structure object
+
+        :returns a pyiron job
+        """
         job = self.pr.create_job(
             job_type=self.pr.job_type.Sphinx,
             job_name=job_name
         )
         job.set_occupancy_smearing(self.ekt_scheme, width=self.ekt)
         job.structure = structure
-        job.set_encut(self.encut)  # in eV
-        job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.25])
+        job.set_encut(self.en_cut)  # in eV
+        job.set_kpoints(self.k_cut, center_shift=[0.5, 0.5, 0.25])
         job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
         positions = [p[2] for p in job.structure.positions]
         job.structure.add_tag(selective_dynamics=(True, True, True))
         job.structure.selective_dynamics[
-            np.where(np.asarray(positions) < zheight)[0]
+            np.where(np.asarray(positions) < z_height)[0]
         ] = (False, False, False)
+        if PES_xy:
+            job.structure.selective_dynamics[index] = (False, False, True)
         job.structure.selective_dynamics[index] = (True, True, False)
         job.calc_minimize(ionic_steps=100,
                           electronic_steps=100)
-
-        # atomic units (1 E_h/ea_0 ~= 51.4 V/Å)
-        right_field = self.e_field / 51.4
+        right_field = self.e_field / 51.4  # atomic units (1 E_h/ea_0 ~= 51.4 V/Å)
         left_field = 0.0
-
         cell = job.structure.cell * self.ANGSTROM_TO_BOHR
         area = np.linalg.norm(np.cross(cell[0], cell[1]))
-
         total_charge = (right_field - left_field) * area / (4 * np.pi)
-
         sort_positions = np.sort(positions)
         job.input.sphinx.initialGuess.rho.charged = Group({})
         job.input.sphinx.initialGuess.rho.charged.charge = total_charge
@@ -103,64 +112,30 @@ class HighFieldJob:
         job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
             'scaling'] = self.preconscaling
         job.input['THREADS'] = self.threads
+        if TS:
+            mainGroup = job.input.sphinx['main']
+            # rename ricQN group inside mainGroup to ricTS group
+            mainGroup['ricTS'] = mainGroup.pop('ricQN')
+            # now add the transition path group inside ricTS
+            # atomId must be the atom index of the evaporating atom
+            mainGroup['ricTS'].set_group('transPath')
+            tp = mainGroup['ricTS']['transPath']
+            tp['atomId'] = index + 1  # python to sphinx change in indices
+            tp['dir'] = [0, 0, 1]
+            job.input['sphinx']['main']['ricTS']['bornOppenheimer']['scfDiag'][
+                'rhoMixing'] = self.rhomixing  # using conservative mixing can help with convergence.
+            job.input['sphinx']['main']['ricTS']['bornOppenheimer']['scfDiag']['preconditioner'][
+                'type'] = self.preconditioner
+            job.input['sphinx']['main']['ricTS']['bornOppenheimer']['scfDiag']['preconditioner'][
+                'scaling'] = self.preconscaling
         queue = 'cm'
         job.server.cores = self.cores
         job.server.queue = queue
-        job.run()
+        return job
 
-    def gdc_evaporation_xy(self, basis, job_name, index, zheight=2):
-        """Function to set up GDC evaporation with fixed xy coordinated and relaxable z. Useful for calculating
-        x-y potential energy surface"""
-        job = self.pr.create_job(
-            job_type=self.pr.job_type.Sphinx,
-            job_name=job_name
-        )
-        job.set_occupancy_smearing(self.ekt_scheme, self.ekt)
-        job.structure = basis
-        job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
-        positions = [p[2] for p in job.structure.positions]
-        job.structure.add_tag(selective_dynamics=(True, True, True))
-        job.structure.selective_dynamics[
-            np.where(np.asarray(positions) < zheight)[0]
-        ] = (False, False, False)
-        job.structure.selective_dynamics[index] = (False, False, True)
-        # job.dEnergy = 1e-4
-        job.calc_minimize(ionic_steps=100,
-                          electronic_steps=100)
-        job.set_encut(self.encut)  # in eV
-        job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.0])
-
-        # atomic units (1 E_h/ea_0 ~= 51.4 V/Å)
-        right_field = self.e_field / 51.4
-        left_field = 0.0
-
-        cell = job.structure.cell * self.ANGSTROM_TO_BOHR
-        area = np.linalg.norm(np.cross(cell[0], cell[1]))
-
-        total_charge = (right_field - left_field) * area / (4 * np.pi)
-
-        sort_positions = np.sort(positions)
-        job.input.sphinx.initialGuess.rho.charged = Group({})
-        job.input.sphinx.initialGuess.rho.charged.charge = total_charge
-        job.input.sphinx.initialGuess.rho.charged.z = sort_positions[-2] * self.ANGSTROM_TO_BOHR
-
-        job.input.sphinx.PAWHamiltonian.nExcessElectrons = -total_charge
-        job.input.sphinx.PAWHamiltonian.dipoleCorrection = True
-        job.input.sphinx.PAWHamiltonian.zField = left_field * self.HARTREE_TO_EV
-        job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['rhoMixing'] = self.rhomixing
-        job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
-            'type'] = self.preconditioner
-        job.input['sphinx']['main']['ricQN']['bornOppenheimer']['scfDiag']['preconditioner'][
-            'scaling'] = self.preconscaling
-        queue = 'cm'
-        job.server.cores = self.cores
-        job.server.queue = queue
-        job.input['THREADS'] = self.threads
-        job.run()
-
-    def field_free_relaxation(self, structure, job_name, zheight=2, vdw=False, constrained=False, index=None):
+    def field_free_relaxation(self, structure, job_name, z_height=2, vdw=False, constrained=False, index=None):
         """Function to set up  slab relaxation calculations for the given HighFieldJob instance, by fixing the
-        layers lying lower than zheight (Angstroms) and without any field. Use constrained if you want to fix an atom
+        layers lying lower than z_height (Angstroms) and without any field. Use constrained if you want to fix an atom
         of index."""
         job = self.pr.create_job(self.pr.job_type.Sphinx, job_name)
         job.set_occupancy_smearing(self.ekt_scheme, width=self.ekt)
@@ -168,12 +143,12 @@ class HighFieldJob:
         positions = [p[2] for p in job.structure.positions]
         job.structure.add_tag(selective_dynamics=(True, True, True))
         job.structure.selective_dynamics[
-            np.where(np.asarray(positions) < zheight)[0]
+            np.where(np.asarray(positions) < z_height)[0]
         ] = (False, False, False)
         if constrained:
             job.structure.selective_dynamics[index] = (False, False, True)
-        job.set_kpoints(self.kcut)
-        job.set_encut(self.encut)
+        job.set_kpoints(self.k_cut)
+        job.set_encut(self.en_cut)
         job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
         job.calc_minimize()
         if vdw:
@@ -190,23 +165,23 @@ class HighFieldJob:
         queue = 'cm'
         job.server.cores = self.cores
         job.server.queue = queue
-        job.run()
+        return job
 
-    def gdc_relaxation(self, structure, job_name, zheight=2, vdw=False, constrained=False, index=None):
+    def gdc_relaxation(self, structure, job_name, z_height=2, vdw=False, constrained=False, index=None):
         """Function to set up charged slab relaxation calculations for the given HighFieldJob instance, by fixing the
-        layers lying lower than zheight (Angstroms)."""
+        layers lying lower than z_height (Angstroms)."""
         job = self.pr.create_job(self.pr.job_type.Sphinx, job_name)
         job.set_occupancy_smearing(self.ekt_scheme, width=self.ekt)
         job.structure = structure
         positions = [p[2] for p in job.structure.positions]
         job.structure.add_tag(selective_dynamics=(True, True, True))
         job.structure.selective_dynamics[
-            np.where(np.asarray(positions) < zheight)[0]
+            np.where(np.asarray(positions) < z_height)[0]
         ] = (False, False, False)
         if constrained:
             job.structure.selective_dynamics[index] = (False, False, True)
-        job.set_kpoints(self.kcut)
-        job.set_encut(self.encut)
+        job.set_kpoints(self.k_cut)
+        job.set_encut(self.en_cut)
         job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
         job.calc_minimize()
         right_field = self.e_field / 51.4
@@ -235,67 +210,7 @@ class HighFieldJob:
         queue = 'cm'
         job.server.cores = self.cores
         job.server.queue = queue
-        job.run()
-
-    def gdc_transition_state(self, structure, job_name, zheight=2, index=0, push=False, push_val=None,vdw=False):
-        """ Function to run transition state optimization on HighFieldJob instatnce to find the barriers. The index
-        is the atom id on which TS optimization is run, by fixing the layers below zheight (Angstroms). If push is
-        True, then atom with given index is pushed along z by a value of pushVal (Angstroms)"""
-        job = self.pr.create_job(
-            job_type=self.pr.job_type.Sphinx,
-            job_name=job_name
-        )
-        job.set_occupancy_smearing(self.ekt_scheme, width=self.ekt)
-        job.structure = structure
-        job.set_encut(self.encut)  # in eV
-        job.set_kpoints(self.kcut, center_shift=[0.5, 0.5, 0.0])
-        job.set_convergence_precision(electronic_energy=self.e_energy, ionic_energy_tolerance=self.i_energy)
-        positions = [p[2] for p in job.structure.positions]
-        job.structure.add_tag(selective_dynamics=(True, True, True))
-        job.structure.selective_dynamics[
-            np.where(np.asarray(positions) < zheight)[0]
-        ] = (False, False, False)
-        job.structure.selective_dynamics[index] = (True, True, True)
-        if push:
-            job.structure.positions[index, 2] += push_val
-        job.calc_minimize(ionic_steps=100,
-                          electronic_steps=100)
-        right_field = self.e_field / 51.4
-        left_field = 0.0
-        cell = job.structure.cell * self.ANGSTROM_TO_BOHR
-        area = np.linalg.norm(np.cross(cell[0], cell[1]))
-        total_charge = (right_field - left_field) * area / (4 * np.pi)
-        sort_positions = np.sort(positions)
-        job.input.sphinx.initialGuess.rho.charged = Group({})
-        job.input.sphinx.initialGuess.rho.charged.charge = total_charge
-        job.input.sphinx.initialGuess.rho.charged.z = sort_positions[-2] * self.ANGSTROM_TO_BOHR
-        if vdw:
-            job.input.sphinx.PAWHamiltonian.vdwCorrection = Group({})
-            job.input.sphinx.PAWHamiltonian.vdwCorrection.method = "\"D2\""
-        job.input.sphinx.PAWHamiltonian.nExcessElectrons = -total_charge
-        job.input.sphinx.PAWHamiltonian.dipoleCorrection = True
-        job.input.sphinx.PAWHamiltonian.zField = left_field * self.HARTREE_TO_EV
-        mainGroup = job.input.sphinx['main']
-        # rename ricQN group inside mainGroup to ricTS group
-        mainGroup['ricTS'] = mainGroup.pop('ricQN')
-        # now add the transition path group inside ricTS
-        # evapId must be the atom index of the evaporating atom
-        mainGroup['ricTS'].set_group('transPath')
-        tp = mainGroup['ricTS']['transPath']
-        tp['atomId'] = index + 1
-        tp['dir'] = [0, 0, 1]
-        job.input['sphinx']['main']['ricTS']['bornOppenheimer']['scfDiag'][
-            'rhoMixing'] = self.rhomixing  # using conservative mixing can help with convergence.
-        job.input['sphinx']['main']['ricTS']['bornOppenheimer']['scfDiag']['preconditioner'][
-            'type'] = self.preconditioner
-        job.input['sphinx']['main']['ricTS']['bornOppenheimer']['scfDiag']['preconditioner'][
-            'scaling'] = self.preconscaling
-        queue = 'cm'
-        job.server.cores = self.cores
-        job.server.queue = queue
-        job.input['THREADS'] = self.threads
-        job.executable.version = '3.0'
-        job.run()
+        return job
 
     @staticmethod
     def get_high_index_surface(element='Ni', crystal_structure='fcc', lattice_constant=3.526,
@@ -401,18 +316,24 @@ class HighFieldJob:
         adsorbed_structure = structure.to_ase()
         for i in range(len(adsorbate_positions)):
             add_adsorbate(adsorbed_structure, adsorbate,
-                          position=(structure.positions[adsorbate_positions[i], 0], structure.positions[adsorbate_positions[i], 1]),
+                          position=(structure.positions[adsorbate_positions[i], 0],
+                                    structure.positions[adsorbate_positions[i], 1]),
                           height=adsorbate_height)
         return ase_to_pyiron(adsorbed_structure)
 
     def restart_gdc_calculations(self, new_job_name, old_job_name, TS=False):
-        """Restart evaporation or relaxation or TS generalized dipole correction calculculations  from previous charge
-        density of old_job_name """
+        """Restart evaporation or relaxation or TS generalized dipole correction calculations  from previous charge
+        density of old_job_name
+        :param TS: set to True if restarting calculation is transition stateoptimization
+        :param old_job_name: name of the job to restart
+        :param new_job_name: name of the restarting job
+        :returns restarted pyiron job
+        """
         old_job = self.pr.load(old_job_name, convert_to_object=True)
         charge_density_file = old_job.working_directory + '/rho.sxb'
         job = self.pr.create_job(self.pr.job_type.Sphinx, new_job_name)
         job.input = old_job.input
-        job.input.sphinx.initialGuess.rho = Group({"file": '"'+charge_density_file+'"'})
+        job.input.sphinx.initialGuess.rho = Group({"file": '"' + charge_density_file + '"'})
         job.structure = old_job.get_structure(-1)
         if TS:
             job.input['sphinx']['main']['ricTS']['bornOppenheimer']['scfDiag'][
@@ -432,5 +353,4 @@ class HighFieldJob:
         job.server.cores = self.cores
         job.server.queue = queue
         job.input['THREADS'] = self.threads
-        job.run()
-
+        return job
