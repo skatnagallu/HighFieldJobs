@@ -3,6 +3,7 @@
 # Distributed under the terms of "New BSD License", see the LICENSE file.
 
 import numpy as np
+import subprocess
 from pyiron_atomistics.sphinx.base import Group
 from pyiron_atomistics.atomistics.structure.atoms import pymatgen_to_pyiron, pyiron_to_pymatgen, ase_to_pyiron, \
     CrystalStructure
@@ -35,16 +36,22 @@ class HighFieldJob:
     e_energy = 1e-7
     i_energy = 1e-3
 
-    # todo: add functions to do layer convergence and fixed layer convergence
     def __init__(self, pr, e_field, en_cut, k_cut):
         """ HighFieldJob instance which has pr a pyiron project attribute, structure attribute, job_name attribute,
-        eField as the electric field (V/A) to be applied attribute, encut as the energy cutoff attribute in eV and
-        kcut as the kpoint mesh. """
+            eField as the electric field (V/A) to be applied attribute, en_cut as the energy cutoff attribute in eV and
+            k_cut as the k_point mesh. """
         self.pr = pr
         self.e_field = e_field
         self.en_cut = en_cut
         self.k_cut = k_cut
         HighFieldJob.num_of_jobs += 1
+
+    def reset(self, pr, e_field, en_cut, k_cut):
+        """ reset high field job attributes."""
+        self.pr = pr
+        self.e_field = e_field
+        self.en_cut = en_cut
+        self.k_cut = k_cut
 
     @classmethod
     def set_job_variables(cls, rho_mixing, preconditioner, preconscaling, threads, cores, ekt, ekt_scheme):
@@ -55,6 +62,69 @@ class HighFieldJob:
         cls.cores = cores
         cls.ekt = ekt
         cls.ekt_scheme = ekt_scheme
+
+    def slab_height_jobs(self, structure, job_name, number_layers):
+        """ Function to create jobs and run for slab height convergence
+        :param structure: primitive structure, which will be repeated [1,1,number_layers]  for calculations
+        :param job_name: Job_name describing the structure and e_field for instance
+        :param number_layers: a list of integers indicating number of layers in z
+        :return: None runs jobs
+        """
+        self.pr = self.pr.create_group("slab_heights")
+        for i in number_layers:
+            size = [1, 1, int(i)]
+            struct = structure.repeat(size)
+            job = self.gdc_relaxation(structure=struct, job_name=job_name+'_'+str(int(i))+'layers', z_height=2)
+            job.run()
+
+    def frozen_height_jobs(self, structure, job_name, frozen_height):
+        """ Function to create jobs and run for frozen height convergence
+        :param structure: primitive structure, which will be repeated [1,1,number_layers]  for calculations
+        :param job_name: Job_name describing the structure and e_field for instance
+        :param frozen_height: a list of heights, to be kept fixed in slab
+        :return: None runs jobs
+        """
+        self.pr = self.pr.create_group("frozen_heights")
+        for i in frozen_height:
+            struct = structure.copy()
+            job = self.gdc_relaxation(structure=struct, job_name=job_name+'_'+str(int(i))+'fh', z_height=i)
+            job.run()
+
+    @staticmethod
+    def frozen_height_analysis(pr):
+        """
+        A function to analyse the frozen height convergence jobs for gdc.
+        :param pr: Pyiron project folder where the jobs are contained
+        :return: relaxPositions and relaxPatterns with changes in positions and in positions in percentage.
+        """
+        relaxPatterns = {}
+        relaxPositions = {}
+        for job in pr.iter_jobs():
+            if job.status == 'finished':
+                ini = np.diff(job.get_structure(0).positions[:, 2])
+                fin = np.diff(job.get_structure(-1).positions[:, 2])
+                relaxPatterns[job.job_name.split('_', -1)[-1]] = ((fin - ini) / ini) * 100
+                relaxPositions[job.job_name.split('_', -1)[-1]] = (fin - ini)
+
+        return relaxPositions, relaxPatterns
+
+    @staticmethod
+    def slab_height_analysis(pr):
+        """
+        A function to analyse the slab height convergence jobs for gdc.
+        :param pr: Pyiron project folder where the jobs are contained
+        :return: relaxPositions and relaxPatterns with changes in positions and in positions in percentage.
+        """
+        relaxPatterns = {}
+        relaxPositions = {}
+        for job in pr.iter_jobs():
+            if job.status == 'finished':
+                ini = np.diff(job.get_structure(0).positions[:, 2])
+                fin = np.diff(job.get_structure(-1).positions[:, 2])
+                relaxPatterns[job.job_name.split('_', -1)[-1]] = ((fin - ini) / ini) * 100
+                relaxPositions[job.job_name.split('_', -1)[-1]] = (fin - ini)
+
+        return relaxPositions, relaxPatterns
 
     def gdc_evaporation(self, structure, job_name, index, z_height=2, vdw=False, PES_xy=False, TS=False):
         """Function to set up charged slab calculations with eField in Volts/Angstrom, and fixing layers below the
@@ -69,7 +139,7 @@ class HighFieldJob:
         :param job_name: name of pyiron job
         :param structure: pyiron structure object
 
-        :returns a pyiron job
+        :return: a pyiron job
         """
         job = self.pr.create_job(
             job_type=self.pr.job_type.Sphinx,
@@ -320,6 +390,23 @@ class HighFieldJob:
                                     structure.positions[adsorbate_positions[i], 1]),
                           height=adsorbate_height)
         return ase_to_pyiron(adsorbed_structure)
+
+    @staticmethod
+    def hirshfeld_charges(job):
+        """
+        Hirshfeld job analysis for SPHInX jobs.
+        :param job: SPHInX jobs
+        :return: hc is an array of hirshfeld charges
+        """
+        job.decompress()
+        subprocess.call([f'cd {job.working_directory};module load sphinx;sxpawatomvolume --log'], shell=True)
+        with open(job.working_directory + '/sxpawatomvolume.log', 'r') as f:
+            lines = f.read().splitlines()
+            last_line = lines[-1]
+            f.close()
+        hcl = last_line.split(':')[1].strip('[];')[2:].split(',')
+        hc = np.array(hcl, dtype=np.float32)
+        return hc
 
     def restart_gdc_calculations(self, new_job_name, old_job_name, TS=False):
         """Restart evaporation or relaxation or TS generalized dipole correction calculations  from previous charge
